@@ -1,7 +1,10 @@
 import re
 
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, EndpointConnectionError
+
+import csv
+from collections import defaultdict
 
 from trailblazer import log
 from trailblazer.boto.util import botocore_config
@@ -11,6 +14,13 @@ from trailblazer.boto.sts import get_assume_role_session
 
 
 def enumerate_services(config, services, dry_run=False):
+
+    # read a CSV file for seen functions
+    apis = defaultdict(list)
+    with open('botocore_api_2_event_names.csv', 'rb') as csvfile:
+        reader = csv.reader(csvfile)
+        for row in reader:
+            apis[row[0]].append(row[1])
 
     # Create a boto3 session to use for enumeration
     session = boto3.Session()
@@ -58,6 +68,11 @@ def enumerate_services(config, services, dry_run=False):
             else:
                 session_name = function_key
 
+            # check session_name in the seen functions
+            if session_name in apis[service]:
+                log.info('found {}:{}, skipping'.format(service, session_name))
+                continue
+
             # Set the session to the name of the API call we are making
             session = get_assume_role_session(
                 account_number=config['account_number'],
@@ -82,12 +97,14 @@ def enumerate_services(config, services, dry_run=False):
                             # Set something because we have to
                             func_params[param] = 'testparameter'
 
-                        log.info('Calling {}.{} with params {} in {}'.format(service, new_func[0], func_params, region))
+                        log.info('Calling {}:{} with params {} in {}'.format(service, new_func[0], func_params, region))
 
                         if not dry_run:
                         	make_api_call(service, new_func, region, func_params)
 
                     except ClientError as e:
+                        log.debug(e)
+                    except EndpointConnectionError as e:
                         log.debug(e)
                     except boto3.exceptions.S3UploadFailedError as e:
                         log.debug(e)

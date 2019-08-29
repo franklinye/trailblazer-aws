@@ -11,9 +11,12 @@ from botocore.exceptions import ClientError
 from trailblazer import log
 from trailblazer.boto.util import botocore_config
 
+service_file = {}
 
 def get_service_json_files(config):
-    service_file = {}
+
+    if service_file:
+        return service_file
 
     root_dir = config['botocore_document_json_path']
 
@@ -95,11 +98,11 @@ def make_api_call(service, function, region, func_params):
                 time.sleep(.1)
                 return
         elif function[0] == 'upload_file':
-            function[1](service_file_json[service], 'testbucket', 'testkey')
+            function[1](service_file[service], 'testbucket', 'testkey')
             time.sleep(.1)
             return
         elif function[0] == 'upload_fileobj':
-            with open(service_file_json[service], 'rb') as data:
+            with open(service_file[service], 'rb') as data:
                 function[1](data, 'testbucket', 'testkey')
                 time.sleep(.1)
                 return
